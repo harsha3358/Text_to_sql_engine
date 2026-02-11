@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text2SQL</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>🔥 Text2SQL Engine</h1>
+    <p class="subtitle">Type natural language. Get SQL. No AI. Pure Logic.</p>
+
+    <!-- NO FORM TAG -->
+    <textarea 
+        id="queryInput" 
+        placeholder="e.g. Show employees with salary greater than 80000">
+    </textarea>
+    
+    <!-- IMPORTANT: type="button" -->
+    <button type="button" onclick="sendQuery()">
+        Generate SQL ⚡
+    </button>
+
+    <div class="output">
+        <h3>🧠 Generated SQL:</h3>
+        <pre id="sqlOutput"></pre>
+
+        <h3>📊 Results:</h3>
+        <div id="resultTable"></div>
+    </div>
+</div>
+
+<script>
+async function sendQuery() {
+    const textarea = document.getElementById("queryInput");
+    const query = textarea.value;
+
+    if (!query.trim()) {
+        alert("Please enter a query!");
+        return;
+    }
+
+    const response = await fetch("/query", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query: query})
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+        alert(data.error);
+        return;
+    }
+
+    // Show generated SQL
+    document.getElementById("sqlOutput").innerText = data.sql;
+
+    // Build results table
+    let tableHTML = "<table><tr>";
+
+    data.columns.forEach(col => {
+        tableHTML += `<th>${col}</th>`;
+    });
+
+    tableHTML += "</tr>";
+
+    data.rows.forEach(row => {
+        tableHTML += "<tr>";
+        row.forEach(cell => {
+            tableHTML += `<td>${cell}</td>`;
+        });
+        tableHTML += "</tr>";
+    });
+
+    tableHTML += "</table>";
+
+    document.getElementById("resultTable").innerHTML = tableHTML;
+
+    // Keep focus on textarea so you can type again
+    textarea.focus();
+}
+</script>
+
+</body>
+</html>

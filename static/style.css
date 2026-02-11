@@ -1,0 +1,88 @@
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    color: white;
+    min-height: 100vh;   /* changed from height to min-height */
+    padding: 40px 0;
+}
+
+.container {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(15px);
+    padding: 30px;
+    border-radius: 20px;
+    width: 800px;
+    margin: auto;
+    box-shadow: 0 0 40px rgba(0,255,255,0.4);
+}
+
+h1 {
+    text-align: center;
+    font-size: 2.5rem;
+    color: #00ffff;
+}
+
+.subtitle {
+    text-align: center;
+    color: #aaa;
+}
+
+textarea {
+    width: 100%;
+    height: 100px;
+    border-radius: 15px;
+    border: none;
+    padding: 15px;
+    font-size: 1rem;
+    margin-top: 20px;
+    resize: none;
+}
+
+button {
+    width: 100%;
+    margin-top: 15px;
+    padding: 15px;
+    border-radius: 15px;
+    border: none;
+    background: linear-gradient(45deg, #ff00cc, #3333ff);
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: scale(1.05);
+}
+
+pre {
+    background: rgba(0,0,0,0.5);
+    padding: 10px;
+    border-radius: 10px;
+    color: #00ff99;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    margin-top: 10px;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+th, td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    text-align: left;
+}
+
+th {
+    color: #ff00cc;
+}
+
+.output {
+    margin-top: 20px;
+    max-height: 400px;   /* makes table scrollable */
+    overflow-y: auto;
+}
