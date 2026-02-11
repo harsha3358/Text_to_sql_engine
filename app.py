@@ -6,7 +6,7 @@ import difflib
 app = Flask(__name__)
 
 # ---------------------------
-# CONFIGURATION (Schema Maps)
+# SCHEMA CONFIG
 # ---------------------------
 
 TABLES = {
@@ -17,14 +17,15 @@ TABLES = {
 }
 
 COLUMNS = {
+    "id": "id",
     "name": "name",
     "salary": "salary",
-    "id": "id",
-    "department": "department_id"
+    "department": "department_id",
+    "department_id": "department_id"
 }
 
 # ---------------------------
-# HELPER FUNCTIONS
+# HELPERS
 # ---------------------------
 
 def preprocess(text):
@@ -36,18 +37,17 @@ def fuzzy_match(word, possibilities, cutoff=0.7):
 
 def detect_table(text):
     words = text.split()
+    detected = []
     for word in words:
         match = fuzzy_match(word, TABLES.keys())
         if match:
-            return TABLES[match]
-    return None
+            detected.append(TABLES[match])
+    return list(set(detected))
 
-def detect_column(text):
-    words = text.split()
-    for word in words:
-        match = fuzzy_match(word, COLUMNS.keys())
-        if match:
-            return COLUMNS[match]
+def detect_column(word):
+    match = fuzzy_match(word, COLUMNS.keys())
+    if match:
+        return COLUMNS[match]
     return None
 
 # ---------------------------
@@ -56,62 +56,122 @@ def detect_column(text):
 
 def generate_sql(text):
     text = preprocess(text)
-    table = detect_table(text)
+    tables = detect_table(text)
 
-    if not table:
+    if not tables:
         return None
 
-    # COUNT support
-    if "count" in text:
-        sql = f"SELECT COUNT(*) FROM {table}"
-    else:
-        sql = f"SELECT * FROM {table}"
+    sql = f"SELECT * FROM {tables[0]}"
+    and_conditions = []
+    or_conditions = []
 
-    where_added = False
+    # ---------------------------
+    # BETWEEN
+    # ---------------------------
+    for match in re.finditer(r'(\w+) between (\d+) and (\d+)', text):
+        column = detect_column(match.group(1))
+        if column:
+            and_conditions.append(f"{column} BETWEEN {match.group(2)} AND {match.group(3)}")
 
-    # GREATER THAN
-    if "greater than" in text:
-        match = re.search(r'greater than (\d+)', text)
-        column = detect_column(text)
-        if match and column:
-            value = match.group(1)
-            sql += f" WHERE {column} > {value}"
-            where_added = True
+    # ---------------------------
+    # GREATER / LESS
+    # ---------------------------
+    for match in re.finditer(r'(\w+)?\s*greater than (\d+)', text):
+        column = detect_column(match.group(1) or "salary") or "salary"
+        and_conditions.append(f"{column} > {match.group(2)}")
 
-    # LESS THAN
-    elif "less than" in text:
-        match = re.search(r'less than (\d+)', text)
-        column = detect_column(text)
-        if match and column:
-            value = match.group(1)
-            sql += f" WHERE {column} < {value}"
-            where_added = True
+    for match in re.finditer(r'(\w+)?\s*less than (\d+)', text):
+        column = detect_column(match.group(1) or "salary") or "salary"
+        and_conditions.append(f"{column} < {match.group(2)}")
 
-    # EQUAL TO
-    elif "equal to" in text:
-        match = re.search(r'equal to (\d+)', text)
-        column = detect_column(text)
-        if match and column:
-            value = match.group(1)
-            sql += f" WHERE {column} = {value}"
-            where_added = True
+    # ---------------------------
+    # STRING EQUAL
+    # ---------------------------
+    for match in re.finditer(r'(\w+) equal to (\w+)', text):
+        column = detect_column(match.group(1))
+        if column:
+            and_conditions.append(f"{column} = '{match.group(2)}'")
 
+    # ---------------------------
+    # LIKE SUPPORT
+    # ---------------------------
+    for match in re.finditer(r'(\w+) like (\w+)', text):
+        column = detect_column(match.group(1))
+        if column:
+            and_conditions.append(f"{column} LIKE '%{match.group(2)}%'")
+
+    # ---------------------------
+    # DIRECT EQUAL (column value)
+    # ---------------------------
+    for match in re.finditer(r'(\w+)\s+(\d+)', text):
+        column = detect_column(match.group(1))
+        if column:
+            and_conditions.append(f"{column} = {match.group(2)}")
+
+    # ---------------------------
+    # OR SUPPORT
+    # ---------------------------
+    if " or " in text:
+        parts = text.split(" or ")
+        for part in parts:
+            match = re.search(r'(\w+)\s+(\d+)', part)
+            if match:
+                column = detect_column(match.group(1))
+                if column:
+                    or_conditions.append(f"{column} = {match.group(2)}")
+
+    # ---------------------------
+    # APPLY WHERE
+    # ---------------------------
+    where_clause = ""
+
+    if and_conditions:
+        where_clause += " AND ".join(and_conditions)
+
+    if or_conditions:
+        if where_clause:
+            where_clause = f"({where_clause}) OR " + " OR ".join(or_conditions)
+        else:
+            where_clause = " OR ".join(or_conditions)
+
+    if where_clause:
+        sql += " WHERE " + where_clause
+
+    # ---------------------------
+    # GROUP BY
+    # ---------------------------
+    if "per" in text:
+        for word in text.split():
+            column = detect_column(word)
+            if column:
+                sql = f"SELECT {column}, COUNT(*) FROM {tables[0]} GROUP BY {column}"
+                break
+
+    # ---------------------------
+    # NESTED QUERY (Simple Example)
+    # ---------------------------
+    if "in department" in text:
+        match = re.search(r'in department (\d+)', text)
+        if match:
+            sql = f"""SELECT * FROM Employees 
+                      WHERE department_id IN 
+                      (SELECT id FROM Departments WHERE id = {match.group(1)})"""
+
+    # ---------------------------
     # ORDER BY
+    # ---------------------------
     if "sort by" in text or "order by" in text:
-        column = detect_column(text)
-        if column:
-            sql += f" ORDER BY {column}"
+        for word in text.split():
+            column = detect_column(word)
+            if column:
+                sql += f" ORDER BY {column}"
+                break
 
-    # HIGHEST / LOWEST
     if "highest" in text:
-        column = detect_column(text)
-        if column:
-            sql += f" ORDER BY {column} DESC LIMIT 1"
+        sql += " ORDER BY salary DESC LIMIT 1"
 
     if "lowest" in text:
-        column = detect_column(text)
-        if column:
-            sql += f" ORDER BY {column} ASC LIMIT 1"
+        sql += " ORDER BY salary ASC LIMIT 1"
 
     sql += ";"
     return sql
@@ -127,7 +187,6 @@ def home():
 @app.route("/query", methods=["POST"])
 def query():
     user_input = request.json.get("query")
-
     sql = generate_sql(user_input)
 
     if not sql:
@@ -153,9 +212,5 @@ def query():
     finally:
         conn.close()
 
-# ---------------------------
-# RUN APP
-# ---------------------------
-
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=True)
